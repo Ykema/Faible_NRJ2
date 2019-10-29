@@ -6,14 +6,15 @@
 #include "stm32l4xx_ll_utils.h"
 #include "stm32l4xx_ll_gpio.h"
 #include "stm32l4xx_ll_cortex.h"
+#include"stdio.h"
 // #if defined(USE_FULL_ASSERT)
 // #include "stm32_assert.h"
 // #endif /* USE_FULL_ASSERT */
 
 #include "gpio.h"
-val=0;
-cmpt=1;
-blue_mode=0;
+int val=0;
+int cmpt=1;
+int blue_mode=0;
 void     SystemClock_Config(void);
 
 int main(void)
@@ -44,6 +45,8 @@ while (1)
  	{
 	if(blue_mode==0){
 		blue_mode=BLUE_BUTTON();
+
+		printf("je suis dans le mode blue");
 	}
 	if	( blue_mode ){
 
@@ -80,7 +83,7 @@ void config_sistick_v2(void){
 
 //	SysTick->LOAD  = 0x006f0001;  /* set reload register */
 //	SysTick->VAL   = 0;                                       /* Load the SysTick Counter Value */
-//	SysTick->CTRL  =0b111;                 /* Enable the Systick Timer */
+	SysTick->CTRL  =0b111;                 /* Enable the Systick Timer */
 //	NVIC_SetPriority (SysTick_IRQn, 2);
 	SysTick_Config(800000000);
 	NVIC_EnableIRQ(SysTick_IRQn);
