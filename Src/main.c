@@ -5,12 +5,15 @@
 #include "stm32l4xx_ll_system.h"
 #include "stm32l4xx_ll_utils.h"
 #include "stm32l4xx_ll_gpio.h"
+#include "stm32l4xx_ll_cortex.h"
 // #if defined(USE_FULL_ASSERT)
 // #include "stm32_assert.h"
 // #endif /* USE_FULL_ASSERT */
 
 #include "gpio.h"
-
+val=0;
+cmpt=1;
+blue_mode=0;
 void     SystemClock_Config(void);
 
 int main(void)
@@ -21,20 +24,37 @@ SystemClock_Config();
 // config GPIO
 GPIO_init();
 
+
+void config_sistick_v2(void);
+
 // init timer pour utiliser la fonction LL_mDelay() de stm32l4xx_ll_utils.c
 LL_Init1msTick( SystemCoreClock );
+//config_sistick_v2();
+//SysTick->CTRL=SysTick_CTRL_CLKSOURCE_Msk |					// interrupt local
+   //     SysTick_CTRL_TICKINT_Msk;
+
+//NVIC_SetPriority(-1,5);
+
+config_sistick_v2();
+LED_GREEN(0);
+
+
 
 while (1)
  	{
-	if	( BLUE_BUTTON() )
-		LED_GREEN(1);
-	else {
-		LED_GREEN(0);
-		LL_mDelay(950);
-		LED_GREEN(1);
-		LL_mDelay(50);
-		}
+	if(blue_mode==0){
+		blue_mode=BLUE_BUTTON();
 	}
+	if	( blue_mode ){
+
+		// mode sleep
+
+		LL_LPM_EnableSleep();
+		__WFI();
+	}
+
+	}
+
 }
 
 /**
@@ -54,6 +74,61 @@ while (1)
   * @param  None
   * @retval None
   */
+
+
+void config_sistick_v2(void){
+
+//	SysTick->LOAD  = 0x006f0001;  /* set reload register */
+//	SysTick->VAL   = 0;                                       /* Load the SysTick Counter Value */
+//	SysTick->CTRL  =0b111;                 /* Enable the Systick Timer */
+//	NVIC_SetPriority (SysTick_IRQn, 2);
+	SysTick_Config(800000000);
+	NVIC_EnableIRQ(SysTick_IRQn);
+
+
+
+}
+
+
+void SysTick_Handler(void){
+
+
+if(cmpt<5){
+
+	LED_GREEN(1);
+} else{
+	LED_GREEN(0);
+
+}
+cmpt++;
+
+if(cmpt==100){
+	cmpt=0;
+}
+
+
+/*	if( BLUE_BUTTON() ){
+			LED_GREEN(1);
+			val=0;}
+	else {
+			if(val==0){
+				LED_GREEN(1);
+				val=1;
+			}
+
+			else{
+					LED_GREEN(0);
+					val=0;
+				}
+			}
+
+
+
+			//LED_GREEN(1);
+*/
+
+}
+
 void SystemClock_Config(void)
 {
 /* MSI configuration and activation */
