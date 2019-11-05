@@ -5,6 +5,10 @@
 #include "stm32l4xx_ll_system.h"
 #include "stm32l4xx_ll_utils.h"
 #include "stm32l4xx_ll_gpio.h"
+#include "stm32l4xx_ll_pwr.h"
+#include "stm32l4xx_ll_rtc.h"
+
+
 #include "stm32l4xx_ll_cortex.h"
 #include <stdio.h>
 // #if defined(USE_FULL_ASSERT)
@@ -17,6 +21,8 @@ int cmpt=1;
 int etat_signal=0;
 int blue_mode=0;
 int expe=2;
+int sleep_ok=0;
+int calibration_ok=0;
 void     SystemClock_Config(void);
 void     SystemClock_Config_24(void);
 
@@ -53,18 +59,51 @@ LED_GREEN(0);
 
 while (1)
  	{
-	if(blue_mode==0){
-		blue_mode=BLUE_BUTTON();
+	if(expe==1){
+			if(blue_mode==0){
+			blue_mode=BLUE_BUTTON();
 
-		printf("je suis dans le mode blue");
+			printf("je suis dans le mode blue");
+			}
+			if	( (blue_mode==1) && (sleep_ok==0)){
+
+				// mode sleep
+
+				LL_LPM_EnableSleep();
+				__WFI();
+				sleep_ok=1;
+			}
 	}
-	if	( blue_mode ){
+	if(expe==2){
 
-		// mode sleep
+		if(blue_mode==0){
+			blue_mode=BLUE_BUTTON();
+		}
+		if	( (blue_mode!=0) && (calibration_ok==0)){
+			printf("je suis dans le mode blue");
 
-		LL_LPM_EnableSleep();
-		__WFI();
+			if(LL_RCC_LSE_IsReady()==0){
+				LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+				LL_PWR_EnableBkUpAccess();
+				LL_RCC_ForceBackupDomainReset();
+				LL_RCC_ReleaseBackupDomainReset();
+				LL_RCC_LSE_Enable();
+
+				while(LL_RCC_LSE_IsReady() !=1);
+
+			}
+
+
+
+				LL_RCC_MSI_EnablePLLMode();
+				calibration_ok=1;
+
+		}
+
+
+
 	}
+
 
 	}
 
@@ -96,7 +135,7 @@ void config_systick_v2(void){
 	SysTick->CTRL  =0b111;                 /* Enable the Systick Timer */
 //	NVIC_SetPriority (SysTick_IRQn, 2);
 	if(expe==1){
-		SysTick_Config(8000000);
+		SysTick_Config(800000);
 	} else{
 		SysTick_Config(240000);
 	}
