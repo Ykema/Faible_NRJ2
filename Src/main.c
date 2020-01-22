@@ -7,7 +7,9 @@
 #include "stm32l4xx_ll_gpio.h"
 #include "stm32l4xx_ll_pwr.h"
 #include "stm32l4xx_ll_rtc.h"
+#include "stdbool.h"
 
+#include "RTC.h"
 
 #include "stm32l4xx_ll_cortex.h"
 #include <stdio.h>
@@ -20,15 +22,29 @@ int val=0;
 int cmpt=1;
 int etat_signal=0;
 int blue_mode=0;
-int expe=2;
+int expe=0;
 int sleep_ok=0;
 int calibration_ok=0;
+
+_Bool isReady = false;
 void     SystemClock_Config(void);
 void     SystemClock_Config_24(void);
-
+void Voltage_selection(void);
+void config_systick_v2(void);
+void Bluemode(void);
 
 int main(void)
 {
+
+Configure_RTC_Clock();
+
+LL_RTC_DisableWriteProtection(RTC);
+
+expe =  LL_RTC_BAK_GetRegister(RTC, LL_RTC_BKP_DR0);
+
+expe ++;
+LL_RTC_BAK_SetRegister(RTC, LL_RTC_BKP_DR0, (expe >= 8) ? 0 : expe);
+LL_RTC_EnableWriteProtection(RTC);
 /* Configure the system clock */
 
 if (expe==1){
@@ -37,75 +53,83 @@ if (expe==1){
 	SystemClock_Config_24();
 }
 
-
 // config GPIO
 GPIO_init();
 
 
-void config_systick_v2(void);
 
 // init timer pour utiliser la fonction LL_mDelay() de stm32l4xx_ll_utils.c
 LL_Init1msTick( SystemCoreClock );
-//config_sistick_v2();
+//config_systick_v2();
 //SysTick->CTRL=SysTick_CTRL_CLKSOURCE_Msk |					// interrupt local
    //     SysTick_CTRL_TICKINT_Msk;
 
 //NVIC_SetPriority(-1,5);
 
 config_systick_v2();
-LED_GREEN(0);
+LED_GREEN(1);
+
+if(expe == 8){
+	LL_RCC_MSI_EnablePLLMode();
+	LL_LPM_EnableSleep();
+	RTC_wakeup_init_from_standby_or_shutdown(20);
+}
+
+if((5 <= expe) || (expe >= 7)){
+	LL_RCC_MSI_EnablePLLMode();
+	LL_LPM_EnableSleep();
+	RTC_wakeup_init_from_stop(20);
+}
 
 
 
 while (1)
  	{
-	if(expe==1){
-			if(blue_mode==0){
-			blue_mode=BLUE_BUTTON();
 
-			printf("je suis dans le mode blue");
-			}
-			if	( (blue_mode==1) && (sleep_ok==0)){
+	Bluemode();
 
-				// mode sleep
-
-				LL_LPM_EnableSleep();
-				__WFI();
-				sleep_ok=1;
-			}
-	}
-	if(expe==2){
-
-		if(blue_mode==0){
-			blue_mode=BLUE_BUTTON();
-		}
-		if	( (blue_mode!=0) && (calibration_ok==0)){
-			printf("je suis dans le mode blue");
-
-			if(LL_RCC_LSE_IsReady()==0){
-				LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
-				LL_PWR_EnableBkUpAccess();
-				LL_RCC_ForceBackupDomainReset();
-				LL_RCC_ReleaseBackupDomainReset();
-				LL_RCC_LSE_Enable();
-
-				while(LL_RCC_LSE_IsReady() !=1);
-
-			}
-
-
-
-				LL_RCC_MSI_EnablePLLMode();
-				calibration_ok=1;
-
-		}
+//	if(expe==1){
+//			if(blue_mode==0){
+//			blue_mode=BLUE_BUTTON();
+//
+//			printf("je suis dans le mode blue");
+//			}
+//			if	( (blue_mode==1) && (sleep_ok==0)){
+//
+//				// mode sleep
+//
+//				LL_LPM_EnableSleep();
+//				__WFI();
+//				sleep_ok=1;
+//			}
+//	}
+//	if(expe==2){
+//
+//		if(blue_mode==0){
+//			blue_mode=BLUE_BUTTON();
+//		}
+//		if	( (blue_mode!=0) && (calibration_ok==0)){
+//			printf("je suis dans le mode blue");
+//
+//			if(LL_RCC_LSE_IsReady()==0){
+//				LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+//				LL_PWR_EnableBkUpAccess();
+//				LL_RCC_ForceBackupDomainReset();
+//				LL_RCC_ReleaseBackupDomainReset();
+//				LL_RCC_LSE_Enable();
+//
+//				while(LL_RCC_LSE_IsReady() !=1);
+//
+//			}
 
 
 
-	}
+//				LL_RCC_MSI_EnablePLLMode();
+//				calibration_ok=1;
+
+ 	}
 
 
-	}
 
 }
 
@@ -133,7 +157,7 @@ void config_systick_v2(void){
 //	SysTick->LOAD  = 0x006f0001;  /* set reload register */
 //	SysTick->VAL   = 0;                                       /* Load the SysTick Counter Value */
 	SysTick->CTRL  =0b111;                 /* Enable the Systick Timer */
-//	NVIC_SetPriority (SysTick_IRQn, 2);
+	NVIC_SetPriority (SysTick_IRQn, 2);
 	if(expe==1){
 		SysTick_Config(800000);
 	} else{
@@ -142,29 +166,24 @@ void config_systick_v2(void){
 
 	NVIC_EnableIRQ(SysTick_IRQn);
 
-
-
 }
 
 
 void SysTick_Handler(void){
 
-if (expe==1){
-	if(cmpt<5){
 
-	LED_GREEN(1);
-} else{
-	LED_GREEN(0);
-
-}
-cmpt++;
-
-if(cmpt==100){
-	cmpt=0;
-}
+	if(cmpt<(5*expe)){
+		LED_GREEN(1);
+	} else{
+		LED_GREEN(0);
+	}
+	cmpt++;
+	if(cmpt==200){
+		cmpt=0;
+	}
 
 
-}else{
+
 	if(etat_signal==0){
 		SIGNAL(1);
 		etat_signal=1;
@@ -173,38 +192,103 @@ if(cmpt==100){
 		etat_signal=0;
 	}
 
+
+
+
+	if( BLUE_BUTTON() ){
+		blue_mode=1;
+	}
+
+
+
+	//LED_GREEN(1);
+
+
 }
 
-
-/*	if( BLUE_BUTTON() ){
-			LED_GREEN(1);
-			val=0;}
-	else {
-			if(val==0){
-				LED_GREEN(1);
-				val=1;
+void Bluemode(void){
+	if(blue_mode){
+		switch (expe){
+		case 1:
+			printf("bonjour");
+			LL_LPM_EnableSleep();
+			__WFI();
+			break;
+		case 2:
+			if(isReady == false){
+				isReady = true;
+				LL_RCC_MSI_EnablePLLMode();
 			}
-
-			else{
-					LED_GREEN(0);
-					val=0;
-				}
+			break;
+		case 3:
+			LL_LPM_EnableSleep();
+			__WFI();
+			break;
+		case 4:
+			if(isReady == false){
+				isReady = true;
+				LL_RCC_MSI_EnablePLLMode();
+			}break;
+		case 5:
+			if(isReady == false){
+				isReady = true;
+				LL_PWR_SetPowerMode(LL_PWR_MODE_STOP0);
+				LL_LPM_EnableDeepSleep();
+				__WFI();
 			}
+			break;
+		case 6:
+			if(isReady == false){
+				isReady = true;
+				LL_PWR_SetPowerMode(LL_PWR_MODE_STOP1);
+				LL_LPM_EnableDeepSleep();
+				__WFI();
+			}
+			break;
+		case 7:
+			if(isReady == false){
+				isReady = true;
+				LL_PWR_SetPowerMode(LL_PWR_MODE_STOP2);
+				LL_LPM_EnableDeepSleep();
+				__WFI();
+			}
+			break;
+		case 8:
+			LL_PWR_SetPowerMode(LL_PWR_MODE_SHUTDOWN);
+			LL_LPM_EnableDeepSleep();
+			__WFI();
+			break;
+		default: break;
+		}
+	}
 
+}
 
-
-			//LED_GREEN(1);
-*/
-
+void Voltage_selection(void){
+	if(expe > 2){
+		LL_PWR_EnableLowPowerRunMode();
+		LL_PWR_EnterLowPowerRunMode();
+	}
 }
 
 void SystemClock_Config_24(void)
 {
 /* MSI configuration and activation */
-LL_FLASH_SetLatency(LL_FLASH_LATENCY_1);
+
+
+if(expe > 2){
+	LL_FLASH_SetLatency(LL_FLASH_LATENCY_3);
+} else {
+	LL_FLASH_SetLatency(LL_FLASH_LATENCY_1);
+}
+
+
 
 //LL_RCC_MSI_DisablePLLMode();
 LL_RCC_MSI_EnableRangeSelection();
+
+// voltage scaling
+Voltage_selection();
 
 if( LL_RCC_MSI_IsEnabledRangeSelect()) LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_9);
 
